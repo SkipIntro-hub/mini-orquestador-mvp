@@ -24,10 +24,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -35,7 +35,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: base-check-${{ github.sha }}
           path: evidence/
@@ -57,14 +57,14 @@ jobs:
           echo "HEAD_SHORT=${HEAD_SHA::7}" >> "$GITHUB_ENV"
 
       - name: Checkout base (before)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           path: base
           persist-credentials: false
 
       - name: Checkout head del PR (after) — no el merge sintético
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.sha }}
@@ -77,7 +77,7 @@ jobs:
           test "$(git -C head rev-parse HEAD)" = "$HEAD_SHA"
           echo "OK: base y head en los SHA del evento"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -125,7 +125,7 @@ jobs:
       # Se publica aunque falle; el job conserva el estado de fallo. No hay capturas sustitutas.
       - name: Publicar artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: visual-pr-${{ env.PR_NUMBER }}-${{ env.HEAD_SHORT }}
           path: |

@@ -1,0 +1,32 @@
+/* Sin fuentes externas: stack de sistema para capturas reproducibles. */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: #FFFFFF;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+.stage {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-probar {
+  /* Color del botón — único valor que cambia en el Issue 001 */
+  background-color: #2563EB;
+
+  color: #FFFFFF;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1;
+  width: 160px;
+  height: 48px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}

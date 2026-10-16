@@ -1,0 +1,15 @@
+{
+  "name": "mini-orquestador-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node scripts/serve.mjs app 4000",
+    "test": "playwright test",
+    "report": "playwright show-report evidence/playwright-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}

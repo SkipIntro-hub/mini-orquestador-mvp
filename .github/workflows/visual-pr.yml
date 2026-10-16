@@ -1,0 +1,139 @@
+name: visual-pr
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: visual-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  # En main: valida que la base funciona (botón según expected-state.json).
+  base-check:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: base-check-${{ github.sha }}
+          path: evidence/
+          retention-days: 14
+
+  # En PR: before desde base.sha, after desde head.sha, checkouts aislados.
+  visual-evidence:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Registrar SHA del evento
+        run: |
+          echo "PR #$PR_NUMBER  base=$BASE_SHA  head=$HEAD_SHA"
+          echo "HEAD_SHORT=${HEAD_SHA::7}" >> "$GITHUB_ENV"
+
+      - name: Checkout base (before)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          persist-credentials: false
+
+      - name: Checkout head del PR (after) — no el merge sintético
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: head
+          persist-credentials: false
+
+      - name: Verificar que cada checkout está en el SHA esperado
+        run: |
+          test "$(git -C base rev-parse HEAD)" = "$BASE_SHA"
+          test "$(git -C head rev-parse HEAD)" = "$HEAD_SHA"
+          echo "OK: base y head en los SHA del evento"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: base/package-lock.json
+
+      # Arnés y dependencias del commit BASE para ambas capturas (mismo procedimiento, código de confianza).
+      - name: Instalar arnés (base)
+        working-directory: base
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Capturar y verificar before/after
+        id: tests
+        working-directory: base
+        env:
+          CI: 'true'
+          CAPTURE_MODE: pr
+          BEFORE_DIR: ${{ github.workspace }}/base/app
+          AFTER_DIR: ${{ github.workspace }}/head/app
+          BEFORE_EXPECTED: ${{ github.workspace }}/base/expected-state.json
+          AFTER_EXPECTED: ${{ github.workspace }}/head/expected-state.json
+          EVIDENCE_DIR: ${{ github.workspace }}/evidence
+        run: npx playwright test
+
+      - name: Metadatos de ejecución
+        if: always()
+        working-directory: base
+        env:
+          EVIDENCE_DIR: ${{ github.workspace }}/evidence
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+        run: node scripts/write-metadata.mjs
+
+      - name: Resumen en la corrida
+        if: always()
+        run: |
+          {
+            echo "### Evidencia visual PR #$PR_NUMBER"
+            echo "- base: \`$BASE_SHA\`"
+            echo "- head: \`$HEAD_SHA\`"
+            echo "- resultado de pruebas: **${{ steps.tests.outcome }}**"
+            echo "- artifact: \`visual-pr-$PR_NUMBER-$HEAD_SHORT\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Se publica aunque falle; el job conserva el estado de fallo. No hay capturas sustitutas.
+      - name: Publicar artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-pr-${{ env.PR_NUMBER }}-${{ env.HEAD_SHORT }}
+          path: |
+            evidence/before.png
+            evidence/after.png
+            evidence/metadata.json
+            evidence/*-state.json
+            evidence/playwright-report/
+            base/test-results/
+          retention-days: 14
+          if-no-files-found: warn
